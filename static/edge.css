@@ -541,7 +541,8 @@ pre code { background: none; border: 0; padding: 0; color: inherit; }
   font-family: inherit;
   cursor: pointer;
 }
-.tabs button[aria-selected="true"] { background: var(--bg-soft); color: var(--text); box-shadow: 0 0 0 1px var(--line-strong); }
+.tabs button[aria-selected="true"],
+.tabs button[aria-pressed="true"] { background: var(--bg-soft); color: var(--text); box-shadow: 0 0 0 1px var(--line-strong); }
 
 .log {
   font-family: var(--mono);

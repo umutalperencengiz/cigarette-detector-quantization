@@ -1,11 +1,13 @@
 # Model artifacts
 
-Only the two graphs the live demo loads are committed to this repository:
+Only the graphs the live demo loads are committed to this repository:
 
 | File | Size | Used by |
 | --- | --- | --- |
-| `yolo11n_int8_static_640.onnx` | 3.3 MB | demo default, `results/int8_static_640.json` |
+| `yolo11n_int8_static_640.onnx` | 4.4 MB | demo default, `results/int8_static_640.json` |
 | `yolo11n_fp32_640.onnx` | 10.6 MB | demo A/B baseline, `results/fp32_640.json` |
+| `yolo11n_int8_static_320.onnx` | 4.3 MB | demo fast option (`--size 320`) |
+| `yolo11n_fp32_320.onnx` | 10.0 MB | demo fast option (`--size 320`) |
 
 Everything else in the study is generated, not stored:
 

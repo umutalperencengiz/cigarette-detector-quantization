@@ -10,9 +10,9 @@
   <meta property="og:description" content="Same checkpoint, four precisions, four input sizes, measured accuracy and CPU latency. Live FP32 vs INT8 demo in the browser." />
   <meta property="og:image" content="docs/img/hero.png" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23070a0f'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%2335d0a5'/%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="static/edge.css?v=b367bbe6" />
+  <link rel="stylesheet" href="static/edge.css?v=8082c214" />
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js" defer></script>
-  <script src="static/demo.js?v=b367bbe6" defer></script>
+  <script src="static/demo.js?v=8082c214" defer></script>
 </head>
 <body>
 
@@ -66,7 +66,7 @@
       </div>
 
       <figure class="hero-figure">
-        <img src="docs/img/hero.png?v=b367bbe6" alt="A CCTV frame with the quantized detector's cigarette box drawn on it" />
+        <img src="docs/img/hero.png?v=8082c214" alt="A CCTV frame with the quantized detector's cigarette box drawn on it" />
         <figcaption>
           <span>INT8 static · 640 px · 4.4 MB</span>
           <span>0.83 conf</span>
@@ -160,13 +160,13 @@
         </div>
 
         <figure class="card chart-card">
-          <img src="docs/charts/pareto.svg?v=b367bbe6" alt="Scatter of mAP against CPU latency for every variant" />
+          <img src="docs/charts/pareto.svg?v=8082c214" alt="Scatter of mAP against CPU latency for every variant" />
           <figcaption>Each point is a real evaluation run. Squares are the FP32 input-size sweep.</figcaption>
         </figure>
       </div>
 
       <figure class="card chart-card" style="margin-top:20px">
-        <img src="docs/charts/precision.svg?v=b367bbe6" alt="Grouped bars comparing mAP, AP50, AP75, AP small and AP medium per precision" />
+        <img src="docs/charts/precision.svg?v=8082c214" alt="Grouped bars comparing mAP, AP50, AP75, AP small and AP medium per precision" />
         <figcaption>
           Breaking AP apart matters here: the headline number and the small-object number do not move
           together, and a cigarette is almost always a small object under COCO's area thresholds.
@@ -190,7 +190,7 @@
 
       <div class="grid grid--wide">
         <figure class="card chart-card">
-          <img src="docs/charts/size-sweep.svg?v=b367bbe6" alt="Accuracy and latency versus input size" />
+          <img src="docs/charts/size-sweep.svg?v=8082c214" alt="Accuracy and latency versus input size" />
           <figcaption>Left: mAP and AP small versus input size. Right: mean CPU latency for the same runs.</figcaption>
         </figure>
 
@@ -271,7 +271,7 @@
 
       <div class="grid grid--wide">
         <figure class="card chart-card">
-          <img src="docs/charts/threads.svg?v=b367bbe6" alt="Latency versus number of intra-op threads for each precision" />
+          <img src="docs/charts/threads.svg?v=8082c214" alt="Latency versus number of intra-op threads for each precision" />
           <figcaption>
             Median of two passes over 100 validation frames per point, 640 px input. Re-running the same
             frames warms caches, so these values sit ~10% below the one-run-per-image table above; the
@@ -341,6 +341,10 @@
               <button type="button" data-variant="int8" aria-pressed="true">INT8 static</button>
               <button type="button" data-variant="fp32" aria-pressed="false">FP32</button>
             </div>
+            <div class="tabs" role="group" aria-label="Input size">
+              <button type="button" data-size="640">640 px · accurate</button>
+              <button type="button" data-size="320" aria-pressed="true">320 px · fast</button>
+            </div>
             <button class="btn btn--primary" type="button" id="runButton" disabled>Run frame</button>
             <button class="btn" type="button" id="compareButton" disabled>Compare both</button>
           </div>
@@ -365,6 +369,7 @@
           <div class="stats" style="margin-top:14px">
             <div><span>Latency</span><b id="statLatency">—</b></div>
             <div><span>Detections</span><b id="statDetections">—</b></div>
+            <div><span>Peak conf</span><b id="statPeak">—</b></div>
             <div><span>Model file</span><b id="statSize">—</b></div>
           </div>
         </div>

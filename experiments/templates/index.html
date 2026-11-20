@@ -259,6 +259,10 @@
               <button type="button" data-variant="int8" aria-pressed="true">INT8 static</button>
               <button type="button" data-variant="fp32" aria-pressed="false">FP32</button>
             </div>
+            <div class="tabs" role="group" aria-label="Input size">
+              <button type="button" data-size="640">640 px · accurate</button>
+              <button type="button" data-size="320" aria-pressed="true">320 px · fast</button>
+            </div>
             <button class="btn btn--primary" type="button" id="runButton" disabled>Run frame</button>
             <button class="btn" type="button" id="compareButton" disabled>Compare both</button>
           </div>
@@ -281,6 +285,7 @@
           <div class="stats" style="margin-top:14px">
             <div><span>Latency</span><b id="statLatency">—</b></div>
             <div><span>Detections</span><b id="statDetections">—</b></div>
+            <div><span>Peak conf</span><b id="statPeak">—</b></div>
             <div><span>Model file</span><b id="statSize">—</b></div>
           </div>
         </div>

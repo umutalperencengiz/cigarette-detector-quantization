@@ -109,8 +109,8 @@ def output_node(path: Path) -> str:
     raise RuntimeError(f"no node produces {target} in {path.name}")
 
 
-def to_int8_static(source: Path, size: int = 640) -> Path:
-    target = MODELS / "yolo11n_int8_static_640.onnx"
+def to_int8_static(source: Path, size: int = 640, target: Path | None = None) -> Path:
+    target = target or (MODELS / "yolo11n_int8_static_640.onnx")
     if target.exists():
         return target
 

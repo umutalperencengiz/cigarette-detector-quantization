@@ -1,30 +1,56 @@
 /* Live FP32 vs INT8 comparison, entirely in the browser.
  *
  * Both graphs are the same YOLO11n checkpoint, exported from the same script.
- * The page loads ONNX Runtime Web once and keeps one session per precision, so
- * switching models costs nothing after the first download.
+ * The page loads ONNX Runtime Web once and keeps one session per precision,
+ * so switching models costs nothing after the first download.
+ *
+ * Input size trades speed for accuracy: 320 px is ~4x fewer pixels than 640 px
+ * and is the fast default for the in-browser demo; 640 px matches the table.
  */
 
-const INPUT = 640;
 const CLASS_NAME = "cigarette";
+
+const INPUT_SIZES = [640, 320];
+const DEFAULT_SIZE = 320; // fast default to cut browser delay on single-thread wasm
 
 const VARIANTS = {
   fp32: {
-    key: "fp32",
-    label: "FP32",
-    file: "models/yolo11n_fp32_640.onnx",
-    bytes: 10.56 * 1e6,
+    640: {
+      key: "fp32-640",
+      label: "FP32 640",
+      file: "models/yolo11n_fp32_640.onnx",
+      bytes: 10.56 * 1e6,
+      size: 640,
+    },
+    320: {
+      key: "fp32-320",
+      label: "FP32 320",
+      file: "models/yolo11n_fp32_320.onnx",
+      bytes: 9.96 * 1e6,
+      size: 320,
+    },
   },
   int8: {
-    key: "int8",
-    label: "INT8 static",
-    file: "models/yolo11n_int8_static_640.onnx",
-    bytes: 4.44 * 1e6,
+    640: {
+      key: "int8-640",
+      label: "INT8 static 640",
+      file: "models/yolo11n_int8_static_640.onnx",
+      bytes: 4.44 * 1e6,
+      size: 640,
+    },
+    320: {
+      key: "int8-320",
+      label: "INT8 static 320",
+      file: "models/yolo11n_int8_static_320.onnx",
+      bytes: 4.31 * 1e6,
+      size: 320,
+    },
   },
 };
 
 const state = {
   variant: "int8",
+  size: DEFAULT_SIZE,
   conf: 0.25,
   iou: 0.7,
   session: null,
@@ -40,9 +66,12 @@ const state = {
 
 const $ = (selector) => document.querySelector(selector);
 const canvasIn = document.createElement("canvas");
-canvasIn.width = INPUT;
-canvasIn.height = INPUT;
 const ctxIn = canvasIn.getContext("2d", { willReadFrequently: true });
+
+function resizeInput(size) {
+  canvasIn.width = size;
+  canvasIn.height = size;
+}
 
 /* ------------------------------------------------------------------ status */
 function setStatus(text, tone = "") {
@@ -68,12 +97,17 @@ function log(message, highlight = false) {
 }
 
 /* ------------------------------------------------------------------ runtime */
-async function loadVariant(key) {
+function variantKey(variant, size) {
+  return `${variant}-${size}`;
+}
+
+async function loadVariant(variant, size) {
+  const key = variantKey(variant, size);
   if (state.sessions.has(key)) return state.sessions.get(key);
   if (state.loading.has(key)) return state.loading.get(key);
 
-  const variant = VARIANTS[key];
-  setStatus(`loading ${variant.label}`, "");
+  const v = VARIANTS[variant][size];
+  setStatus(`loading ${v.label}`, "");
 
   const promise = (async () => {
     if (typeof ort === "undefined") {
@@ -84,16 +118,16 @@ async function loadVariant(key) {
     ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
 
     const started = performance.now();
-    const session = await ort.InferenceSession.create(variant.file, {
+    const session = await ort.InferenceSession.create(v.file, {
       executionProviders: ["wasm"],
       graphOptimizationLevel: "all",
     });
     const seconds = (performance.now() - started) / 1000;
     state.sessions.set(key, session);
-    const mb = (variant.bytes / 1e6).toFixed(1);
-    setStatus(`${variant.label} ready`, "ok");
-    setChip("#chipModel", `${variant.file.split("/").pop()} · ${mb} MB`);
-    log(`loaded <b>${variant.file.split("/").pop()}</b> (${mb} MB) in ${seconds.toFixed(1)} s`, true);
+    const mb = (v.bytes / 1e6).toFixed(1);
+    setStatus(`${v.label} ready`, "ok");
+    setChip("#chipModel", `${v.file.split("/").pop()} · ${mb} MB`);
+    log(`loaded <b>${v.file.split("/").pop()}</b> (${mb} MB) in ${seconds.toFixed(1)} s`, true);
     return session;
   })().catch((err) => {
     state.loading.delete(key);
@@ -107,31 +141,37 @@ async function loadVariant(key) {
   return promise;
 }
 
-function activateVariant(key) {
-  state.variant = key;
-  state.session = state.sessions.get(key) || null;
+function activateVariant(variant, size) {
+  state.variant = variant;
+  state.size = size;
+  state.session = state.sessions.get(variantKey(variant, size)) || null;
   document.querySelectorAll("[data-variant]").forEach((btn) => {
-    btn.setAttribute("aria-pressed", String(btn.dataset.variant === key));
+    btn.setAttribute("aria-pressed", String(btn.dataset.variant === variant));
   });
-  const variant = VARIANTS[key];
-  setChip("#chipModel", `${variant.file.split("/").pop()} · ${(variant.bytes / 1e6).toFixed(1)} MB`);
-  if (state.session) setStatus(`${variant.label} ready`, "ok");
+  document.querySelectorAll("[data-size]").forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.dataset.size === String(size)));
+  });
+  resizeInput(size);
+  const v = VARIANTS[variant][size];
+  setChip("#chipModel", `${v.file.split("/").pop()} · ${(v.bytes / 1e6).toFixed(1)} MB`);
+  if (state.session) setStatus(`${v.label} ready`, "ok");
 }
 
 /* -------------------------------------------------------------- preprocess */
 function preprocess(sw, sh) {
-  const scale = Math.min(INPUT / sw, INPUT / sh);
+  const size = state.size;
+  const scale = Math.min(size / sw, size / sh);
   const dw = Math.max(1, Math.round(sw * scale));
   const dh = Math.max(1, Math.round(sh * scale));
-  const dx = Math.floor((INPUT - dw) / 2);
-  const dy = Math.floor((INPUT - dh) / 2);
+  const dx = Math.floor((size - dw) / 2);
+  const dy = Math.floor((size - dh) / 2);
 
   ctxIn.fillStyle = "#727272";
-  ctxIn.fillRect(0, 0, INPUT, INPUT);
+  ctxIn.fillRect(0, 0, size, size);
   ctxIn.drawImage(state.source, 0, 0, sw, sh, dx, dy, dw, dh);
 
-  const { data } = ctxIn.getImageData(0, 0, INPUT, INPUT);
-  const plane = INPUT * INPUT;
+  const { data } = ctxIn.getImageData(0, 0, size, size);
+  const plane = size * size;
   const tensor = new Float32Array(plane * 3);
   for (let i = 0, p = 0; i < plane; i += 1, p += 4) {
     tensor[i] = data[p] / 255;
@@ -202,10 +242,11 @@ function decode(raw, meta, confThreshold, iouThreshold) {
   });
 }
 
-async function infer(key, sw, sh) {
-  const session = state.sessions.get(key) || (await loadVariant(key));
+async function infer(variant, sw, sh) {
+  const key = variantKey(variant, state.size);
+  const session = state.sessions.get(key) || (await loadVariant(variant, state.size));
   const { tensor, meta } = preprocess(sw, sh);
-  const feeds = { [session.inputNames[0]]: new ort.Tensor("float32", tensor, [1, 3, INPUT, INPUT]) };
+  const feeds = { [session.inputNames[0]]: new ort.Tensor("float32", tensor, [1, 3, state.size, state.size]) };
 
   const started = performance.now();
   const output = await session.run(feeds);
@@ -286,9 +327,9 @@ function loadImage(url, name) {
   });
 }
 
-async function runOnce(key) {
+async function runOnce(variant) {
   const img = state.source;
-  return infer(key, img.naturalWidth, img.naturalHeight);
+  return infer(variant, img.naturalWidth, img.naturalHeight);
 }
 
 async function runCurrent() {
@@ -297,12 +338,11 @@ async function runCurrent() {
   const button = $("#runButton");
   button.disabled = true;
   try {
-    const key = state.variant;
-    const result = await runOnce(key);
+    const result = await runOnce(state.variant);
     state.lastDetections = result.detections;
     drawOverlay(result.detections, state.source.naturalWidth, state.source.naturalHeight);
-    updateStats(result.ms, result.detections, key);
-    log(`${VARIANTS[key].label}: ${result.detections.length} det · ${result.ms.toFixed(1)} ms`);
+    updateStats(result.ms, result.detections);
+    log(`${VARIANTS[state.variant][state.size].label}: ${result.detections.length} det · ${result.ms.toFixed(1)} ms`);
   } catch (err) {
     log(`error: ${err.message}`);
     console.error(err);
@@ -311,10 +351,11 @@ async function runCurrent() {
   }
 }
 
-function updateStats(ms, detections, key) {
+function updateStats(ms, detections) {
   setChip("#statLatency", `${ms.toFixed(1)} ms`);
   setChip("#statDetections", String(detections.length));
-  setChip("#statSize", `${(VARIANTS[key].bytes / 1e6).toFixed(1)} MB`);
+  const v = VARIANTS[state.variant][state.size];
+  setChip("#statSize", `${(v.bytes / 1e6).toFixed(1)} MB`);
   const peak = detections.reduce((max, d) => Math.max(max, d.confidence), 0);
   setChip("#statPeak", peak ? peak.toFixed(2) : "—");
 }
@@ -331,18 +372,18 @@ async function runComparison() {
     const sh = state.source.naturalHeight;
     const rows = {};
 
-    for (const key of ["fp32", "int8"]) {
-      await loadVariant(key);
-      await infer(key, sw, sh); // warm-up
+    for (const variant of ["fp32", "int8"]) {
+      await loadVariant(variant, state.size);
+      await infer(variant, sw, sh); // warm-up
       const times = [];
       let detections = [];
       for (let i = 0; i < repeats; i += 1) {
-        const run = await infer(key, sw, sh);
+        const run = await infer(variant, sw, sh);
         times.push(run.ms);
         detections = run.detections;
       }
       times.sort((a, b) => a - b);
-      rows[key] = {
+      rows[variant] = {
         ms: times[Math.floor(times.length / 2)],
         mean: times.reduce((a, b) => a + b, 0) / times.length,
         detections,
@@ -368,7 +409,7 @@ async function runComparison() {
     const box = $("#compareResult");
     if (box) box.hidden = false;
     log(
-      `A/B: FP32 ${fp32.ms.toFixed(1)} ms · INT8 ${int8.ms.toFixed(1)} ms · ${speedup.toFixed(2)}× · ${matched}/${fp32.detections.length} boxes agree`,
+      `A/B (${state.size}px): FP32 ${fp32.ms.toFixed(1)} ms · INT8 ${int8.ms.toFixed(1)} ms · ${speedup.toFixed(2)}× · ${matched}/${fp32.detections.length} boxes agree`,
       true
     );
 
@@ -400,7 +441,7 @@ async function startCamera() {
     state.liveMs = [];
     $("#cameraToggle").textContent = "Stop camera";
     log("camera started · running INT8 on every frame", true);
-    await loadVariant("int8");
+    await loadVariant(state.variant, state.size);
     loopCamera();
   } catch (err) {
     log(`camera failed: ${err.message}`);
@@ -434,14 +475,14 @@ async function loopCamera() {
   const video = $("#video");
   if (!state.stream) return;
 
-  if (video.videoWidth && state.sessions.has(state.variant)) {
+  if (video.videoWidth && state.sessions.has(variantKey(state.variant, state.size))) {
     state.source = video;
     const result = await infer(state.variant, video.videoWidth, video.videoHeight);
     state.lastDetections = result.detections;
     state.liveMs.push(result.ms);
     if (state.liveMs.length > 30) state.liveMs.shift();
     const mean = state.liveMs.reduce((a, b) => a + b, 0) / state.liveMs.length;
-    updateStats(mean, result.detections, state.variant);
+    updateStats(mean, result.detections);
     setChip("#statLatency", `${mean.toFixed(0)} ms`);
     drawOverlay(result.detections, video.videoWidth, video.videoHeight);
   }
@@ -452,7 +493,25 @@ async function loopCamera() {
 /* -------------------------------------------------------------------- wiring */
 async function boot() {
   document.querySelectorAll("[data-variant]").forEach((btn) => {
-    btn.addEventListener("click", () => activateVariant(btn.dataset.variant));
+    btn.addEventListener("click", () => {
+      const targetSize = state.size;
+      activateVariant(btn.dataset.variant, targetSize);
+      const session = state.sessions.get(variantKey(btn.dataset.variant, targetSize));
+      if (!session) loadVariant(btn.dataset.variant, targetSize);
+    });
+  });
+
+  document.querySelectorAll("[data-size]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const size = Number(btn.dataset.size);
+      if (size === state.size) return;
+      activateVariant(state.variant, size);
+      const session = state.sessions.get(variantKey(state.variant, size));
+      if (!session) await loadVariant(state.variant, size);
+      if (state.source) {
+        drawOverlay(state.lastDetections, state.source.naturalWidth, state.source.naturalHeight);
+      }
+    });
   });
 
   document.querySelectorAll("[data-frame]").forEach((btn) => {
@@ -467,8 +526,8 @@ async function boot() {
     });
   });
 
-  $("#runButton")?.addEventListener("click", runCurrent);
-  $("#compareButton")?.addEventListener("click", runComparison);
+  $("#runButton")?.addEventListener("click", () => runCurrent());
+  $("#compareButton")?.addEventListener("click", () => runComparison());
   $("#cameraToggle")?.addEventListener("click", () => (state.stream ? stopCamera() : startCamera()));
 
   const fileInput = $("#customInput");
@@ -501,9 +560,8 @@ async function boot() {
   if (compareBtn) compareBtn.disabled = false;
 
   try {
-    await loadVariant("int8");
-    state.session = state.sessions.get("int8");
-    activateVariant("int8");
+    await loadVariant("int8", DEFAULT_SIZE);
+    activateVariant("int8", DEFAULT_SIZE);
     if (first) {
       const img = await loadImage(first.dataset.frame, first.dataset.name || "sample frame");
       showSource(img, img.dataset.name);
