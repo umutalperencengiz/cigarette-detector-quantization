@@ -82,7 +82,7 @@ def stat_cards(data: dict[str, dict]) -> str:
       <div class="stat-card">
         <b>{speedup:.2f}<em>×</em></b>
         <span>faster than FP32</span>
-        <small>{num(int8["latency_ms"]["mean"])} ms vs {num(fp32["latency_ms"]["mean"])} ms · dynamic INT8 only {dyn_speed:.2f}×</small>
+        <small>{num(int8["latency_ms"]["mean"])} ms vs {num(fp32["latency_ms"]["mean"])} ms FP32 · dynamic INT8 runs {1 / dyn_speed:.0f}× slower (317 ms)</small>
       </div>
       <div class="stat-card">
         <b>{num(int8["model_mb"])}<em>MB</em></b>
