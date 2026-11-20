@@ -1,0 +1,45 @@
+{
+  "variant": "fp32_512",
+  "model": "yolo11n_fp32_512.onnx",
+  "model_mb": 10.5,
+  "size": 512,
+  "threads": "default",
+  "conf": 0.001,
+  "nms_iou": 0.7,
+  "images": 1370,
+  "instances": 1780,
+  "predictions": 21158,
+  "metrics": {
+    "ap": 50.87,
+    "ap50": 86.158,
+    "ap75": 51.351,
+    "aps": 28.286,
+    "apm": 51.144,
+    "apl": 64.826,
+    "ar1": 41.854,
+    "ar10": 60.483,
+    "ar100": 61.494,
+    "ars": 40.739,
+    "arm": 63.395,
+    "arl": 73.333
+  },
+  "latency_ms": {
+    "mean": 18.43,
+    "p50": 18.75,
+    "p95": 22.48,
+    "min": 11.5
+  },
+  "pipeline_ms": {
+    "mean": 32.54,
+    "p50": 30.34,
+    "p95": 46.35
+  },
+  "throughput_fps": 54.27,
+  "pipeline_fps": 30.73,
+  "hardware": {
+    "cpu": "Intel64 Family 6 Model 141 Stepping 1, GenuineIntel",
+    "cores": 16,
+    "python": "3.11.3",
+    "onnxruntime": "1.32.0"
+  }
+}

@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Edge Quantization Study — shrinking a cigarette detector by 58%</title>
+  <meta name="description" content="FP32, FP16, dynamic INT8 and static QDQ INT8 versions of a YOLO11n cigarette detector, scored on 1,370 frames with pycocotools and timed on a CPU — plus a live in-browser comparison." />
+  <meta name="theme-color" content="#070a0f" />
+  <meta property="og:title" content="Edge Quantization Study — shrinking a cigarette detector by 58%" />
+  <meta property="og:description" content="Same checkpoint, four precisions, four input sizes, measured accuracy and CPU latency. Live FP32 vs INT8 demo in the browser." />
+  <meta property="og:image" content="docs/img/hero.png" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23070a0f'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%2335d0a5'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="static/edge.css?v={{ASSET_VERSION}}" />
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js" defer></script>
+  <script src="static/demo.js?v={{ASSET_VERSION}}" defer></script>
+</head>
+<body>
+
+  <header class="topbar">
+    <a class="brand" href="#top">
+      <span class="brand-mark"></span>
+      <span class="brand-text">cigarette<b>·edge</b></span>
+    </a>
+    <nav class="topnav" aria-label="Sections">
+      <a href="#precision">Precision</a>
+      <a href="#size">Input size</a>
+      <a href="#threads">Threads</a>
+      <a href="#demo">Demo</a>
+      <a href="#method">Method</a>
+      <a href="#findings">Findings</a>
+    </nav>
+    <span class="status-pill" id="engineStatus">
+      <span class="status-dot"></span><span id="engineText">starting</span>
+    </span>
+  </header>
+
+  <main id="top" class="shell">
+
+    <!-- ================================================== HERO -->
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="eyebrow-dot"></span>edge &amp; quantization</p>
+        <h1>How much of a detector survives 10.6&nbsp;MB&nbsp;→&nbsp;4.4&nbsp;MB?</h1>
+        <p class="lede">
+          The cigarette detector from the companion study, exported once to ONNX and then quantized
+          four ways: FP32, FP16, dynamic INT8, and static QDQ INT8 calibrated on training frames.
+          Every variant is scored on the same 1,370 held-out images with pycocotools and timed on a
+          laptop CPU, so accuracy and milliseconds are measured on the same runs.
+        </p>
+        <p class="lede" style="margin-bottom:24px">
+          Short answer: <strong>{{SIZE_CUT}}</strong> and <strong>{{SPEEDUP_INT8}}× faster</strong> for
+          <strong>{{AP_DROP_INT8}} mAP</strong>, with small-object AP moving {{APS_DELTA}}. The 320 px
+          input is the bigger speed lever and the much worse trade.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn--primary" href="#demo">Compare FP32 vs INT8 live</a>
+          <a class="btn" href="#precision">See the numbers</a>
+          <a class="btn" href="https://umutalperencengiz.github.io/cigarette-small-object-detection/" target="_blank" rel="noopener">Companion paper ↗</a>
+        </div>
+        <div class="chips">
+          <span class="chip" id="chipModel">model: yolo11n_int8_static_640.onnx</span>
+          <span class="chip">ONNX opset 13</span>
+          <span class="chip">ONNX Runtime 1.32 CPU</span>
+          <span class="chip">1,370 val frames</span>
+        </div>
+      </div>
+
+      <figure class="hero-figure">
+        <img src="docs/img/hero.png?v={{ASSET_VERSION}}" alt="A CCTV frame with the quantized detector's cigarette box drawn on it" />
+        <figcaption>
+          <span>INT8 static · 640 px · 4.4 MB</span>
+          <span>{{HERO_CONF}} conf</span>
+        </figcaption>
+      </figure>
+    </section>
+
+    <section class="stats-strip" aria-label="Headline numbers">
+      {{STAT_CARDS}}
+    </section>
+
+    <!-- ================================================== PRECISION -->
+    <section id="precision" class="section">
+      <div class="section-head">
+        <div>
+          <h2>Four precisions, one checkpoint</h2>
+          <p>
+            Quantization is only interesting if it is measured against the thing it replaces.
+            Every row below is the <em>same</em> trained network — only the numeric format changed —
+            evaluated on all 1,370 validation images at 640 px with conf 0.001, NMS IoU 0.7 and
+            maxDets 100.
+          </p>
+        </div>
+        <span class="badge">full validation split</span>
+      </div>
+
+      <div class="grid grid--wide">
+        <div class="card table-card">
+          <div class="table-wrap">
+            <table class="results-table">
+              <thead>
+                <tr>
+                  <th>Variant</th>
+                  <th>Size</th>
+                  <th>mAP<br />50–95</th>
+                  <th>mAP50</th>
+                  <th>mAP75</th>
+                  <th>AP small</th>
+                  <th>CPU ms</th>
+                  <th>FPS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{TABLE_PRECISION}}
+              </tbody>
+            </table>
+          </div>
+          <p class="table-note">
+            Latency is the mean of one <code>session.run</code> per image over the whole split, after
+            5 warm-up runs, on the CPU listed in <a href="#method">Method</a>. Model size is the ONNX
+            file on disk, not the parameter count.
+          </p>
+        </div>
+
+        <figure class="card chart-card">
+          <img src="docs/charts/pareto.svg?v={{ASSET_VERSION}}" alt="Scatter of mAP against CPU latency for every variant" />
+          <figcaption>Each point is a real evaluation run. Squares are the FP32 input-size sweep.</figcaption>
+        </figure>
+      </div>
+
+      <figure class="card chart-card" style="margin-top:20px">
+        <img src="docs/charts/precision.svg?v={{ASSET_VERSION}}" alt="Grouped bars comparing mAP, AP50, AP75, AP small and AP medium per precision" />
+        <figcaption>
+          Breaking AP apart matters here: the headline number and the small-object number do not move
+          together, and a cigarette is almost always a small object under COCO's area thresholds.
+        </figcaption>
+      </figure>
+    </section>
+
+    <!-- ================================================== SIZE -->
+    <section id="size" class="section">
+      <div class="section-head">
+        <div>
+          <h2>Input size is the bigger lever</h2>
+          <p>
+            Before quantizing anything, the cheapest speedup is asking the network to look at fewer
+            pixels. That works, and then it stops working — small objects are the first thing to go,
+            because a cigarette only spans a handful of pixels once the frame is squeezed to 320 px.
+          </p>
+        </div>
+        <span class="badge">FP32 · 320 → 640 px</span>
+      </div>
+
+      <div class="grid grid--wide">
+        <figure class="card chart-card">
+          <img src="docs/charts/size-sweep.svg?v={{ASSET_VERSION}}" alt="Accuracy and latency versus input size" />
+          <figcaption>Left: mAP and AP small versus input size. Right: mean CPU latency for the same runs.</figcaption>
+        </figure>
+
+        <div class="card table-card">
+          <div class="table-wrap">
+            <table class="results-table">
+              <thead>
+                <tr>
+                  <th>Input</th>
+                  <th>mAP</th>
+                  <th>AP small</th>
+                  <th>ms</th>
+                  <th>FPS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{TABLE_SIZE}}
+              </tbody>
+            </table>
+          </div>
+          <p class="table-note">
+            Going 640 → 320 px is {{SWEEP_SPEED}}× faster and costs {{SWEEP_AP_LOSS}} mAP, of which
+            {{SWEEP_APS_LOSS}} comes out of small-object AP. Input size is the bigger speed lever —
+            {{SWEEP_SPEED}}× against {{SPEEDUP_INT8}}× for quantization — but it is also the lever that
+            throws away the objects the detector exists to find.
+          </p>
+        </div>
+      </div>
+
+      <div class="callout callout--warn">
+        <strong>The honest reading:</strong> shrinking the input is not free compression — it changes
+        what the model can see. Quantization changes how the numbers are stored; input size changes
+        the information available. For a cigarette detector, quantization is the better deal.
+      </div>
+    </section>
+
+    <!-- ================================================== THREADS -->
+    <section id="threads" class="section">
+      <div class="section-head">
+        <div>
+          <h2>What a browser visitor actually gets</h2>
+          <p>
+            The demo below runs in WebAssembly with a single thread, because GitHub Pages cannot send
+            the COOP/COEP headers that shared memory requires. Desktop ONNX Runtime happily uses all
+            16 logical cores, and the gap between those two worlds is larger than the gap between
+            precisions — worth measuring before quoting a latency number.
+          </p>
+        </div>
+        <span class="badge">intra-op scaling</span>
+      </div>
+
+      <div class="grid grid--wide">
+        <figure class="card chart-card">
+          <img src="docs/charts/threads.svg?v={{ASSET_VERSION}}" alt="Latency versus number of intra-op threads for each precision" />
+          <figcaption>
+            Median of two passes over 100 validation frames per point, 640 px input. Re-running the same
+            frames warms caches, so these values sit ~10% below the one-run-per-image table above; the
+            scaling shape is the point.
+          </figcaption>
+        </figure>
+
+        <div class="card table-card">
+          <div class="table-wrap">
+            <table class="results-table">
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th>1 thread</th>
+                  <th>All threads</th>
+                  <th>Gain</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{TABLE_THREADS}}
+              </tbody>
+            </table>
+          </div>
+          <p class="table-note">
+            All-threads here means {{CORES}} logical cores (i7-11800H). The in-browser demo is pinned
+            to 1 thread, so its counter runs at roughly the 1-thread column.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================== DEMO -->
+    <section id="demo" class="section">
+      <div class="section-head">
+        <div>
+          <h2>FP32 vs INT8, in this tab</h2>
+          <p>
+            Both graphs are downloaded from this repository and run by ONNX Runtime Web — no server,
+            no upload, nothing leaves the browser. Pick a frame, then run the same image through both
+            precisions and compare the millisecond counter and the boxes.
+          </p>
+        </div>
+        <span class="badge badge--live"><span class="live-dot"></span>wasm · 1 thread</span>
+      </div>
+
+      <div class="grid grid--wide">
+        <div class="card">
+          <div class="demo-bar">
+            <div class="tabs" role="group" aria-label="Precision">
+              <button type="button" data-variant="int8" aria-pressed="true">INT8 static</button>
+              <button type="button" data-variant="fp32" aria-pressed="false">FP32</button>
+            </div>
+            <button class="btn btn--primary" type="button" id="runButton" disabled>Run frame</button>
+            <button class="btn" type="button" id="compareButton" disabled>Compare both</button>
+          </div>
+
+          <div class="stage">
+            <img id="stageImage" alt="Selected sample frame" hidden />
+            <video id="video" playsinline muted hidden></video>
+            <canvas id="overlay" class="stage-overlay"></canvas>
+            <div class="stage-msg" id="stageMsg">Loading the INT8 graph…</div>
+          </div>
+
+          <div class="thumbs" style="margin-top:14px">
+            {{THUMBS}}
+            <label class="btn" style="align-self:center;font-size:12px;padding:8px 12px">
+              Custom image
+              <input type="file" id="customInput" accept="image/*" hidden />
+            </label>
+          </div>
+
+          <div class="stats" style="margin-top:14px">
+            <div><span>Latency</span><b id="statLatency">—</b></div>
+            <div><span>Detections</span><b id="statDetections">—</b></div>
+            <div><span>Model file</span><b id="statSize">—</b></div>
+          </div>
+        </div>
+
+        <div class="demo-side">
+          <div class="card">
+            <h2>A/B result</h2>
+            <div id="compareResult" hidden>
+              <div class="stats">
+                <div><span>FP32</span><b id="compareFp32">—</b></div>
+                <div><span>INT8</span><b id="compareInt8">—</b></div>
+                <div><span>Speedup</span><b id="compareSpeedup">—</b></div>
+              </div>
+              <p style="margin-top:12px;font-size:12.5px">
+                Box agreement: <code id="compareAgree">—</code> at IoU 0.5. Five timed runs per
+                precision, median reported.
+              </p>
+            </div>
+            <p id="compareIdle" style="font-size:12.5px;color:var(--dim)">
+              Press <strong>Compare both</strong> to run FP32 and INT8 over the same frame.
+            </p>
+          </div>
+
+          <div class="card">
+            <h2>Controls</h2>
+            <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px">
+              Confidence threshold · <code id="confValue">0.25</code>
+            </label>
+            <input id="confSlider" type="range" min="0.05" max="0.75" step="0.05" value="0.25" style="width:100%" />
+            <button class="btn" type="button" id="cameraToggle" style="margin-top:12px">Start camera</button>
+            <p style="margin-top:10px;font-size:11.5px;color:var(--dim)">
+              HTTPS is required for the camera. Video frames are processed locally and never sent
+              anywhere.
+            </p>
+          </div>
+
+          <div class="log" id="runLog"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================== METHOD -->
+    <section id="method" class="section">
+      <div class="section-head">
+        <div>
+          <h2>How it was measured</h2>
+          <p>
+            One checkpoint, one export script, one evaluation script. The point of the harness is that
+            every row in every table came out of the same code path, so a difference in the table is a
+            difference in the model.
+          </p>
+        </div>
+        <span class="badge">reproducible</span>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <b>01 · checkpoint</b>
+          <h4>train15 YOLO11n</h4>
+          <p>The best run from the companion study, 11,056 training images, one class.</p>
+        </div>
+        <div class="step">
+          <b>02 · export</b>
+          <h4>ONNX, opset 13</h4>
+          <p>Fixed 640×640 input, output <code>[1, 5, 8400]</code>. Opset 12 produced invalid QDQ graphs.</p>
+        </div>
+        <div class="step">
+          <b>03 · quantize</b>
+          <h4>Three recipes</h4>
+          <p>FP16 cast, dynamic INT8, and static QDQ INT8 calibrated on 256 training frames.</p>
+        </div>
+        <div class="step">
+          <b>04 · evaluate</b>
+          <h4>1,370 images</h4>
+          <p>pycocotools AP with APs/APm/APl, plus latency around the session call only.</p>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top:20px">
+        <div class="card">
+          <h2>Evaluation protocol</h2>
+          <dl class="kv">
+            <dt>split</dt><dd>1,370 validation images, {{INSTANCES}} labelled cigarettes (held out from training)</dd>
+            <dt>decode</dt><dd>letterbox to 640, sigmoid-free single-class decode, per-class NMS</dd>
+            <dt>thresholds</dt><dd>conf 0.001 · NMS IoU 0.7 · maxDets 100</dd>
+            <dt>metric</dt><dd>pycocotools <code>COCOeval</code>, bbox, restricted to those 1,370 image ids</dd>
+            <dt>timing</dt><dd>5 warm-up runs, then one timed <code>session.run</code> per image</dd>
+            <dt>hardware</dt><dd>{{HARDWARE}} · {{CORES}} logical cores · no CUDA in this environment</dd>
+          </dl>
+        </div>
+
+        <div class="card">
+          <h2>Static quantization detail</h2>
+          <p>
+            Calibration uses 256 random <em>training</em> frames, MinMax range, per-channel weights.
+            Validating on the images that shaped the activation ranges would quietly flatter the
+            quantized model, so the calibration set never overlaps the evaluation split.
+          </p>
+          <p>
+            The exported graph is a QDQ model (<code>QuantizeLinear</code>/<code>DequantizeLinear</code>
+            around every conv), which is the format ONNX Runtime prefers for integer kernels and the
+            format ONNX Runtime Web can execute in WebAssembly.
+          </p>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px">
+        <h2>Reproduce</h2>
+        <pre><code>python experiments/export_variants.py     # ONNX + FP16 + dynamic/static INT8
+python experiments/run_suite.py           # full COCO eval for every variant
+python experiments/bench_threads.py       # 1 / 2 / 4 / 8 / all cores
+python experiments/make_charts.py         # regenerate the SVGs
+python experiments/build_site.py          # re-render this page from results/*.json</code></pre>
+      </div>
+    </section>
+
+    <!-- ================================================== FINDINGS -->
+    <section id="findings" class="section">
+      <div class="section-head">
+        <div>
+          <h2>What the measurements say</h2>
+          <p>Including the part where the earlier paper's YOLO row does not reproduce.</p>
+        </div>
+        <span class="badge">read this before quoting a number</span>
+      </div>
+
+      <div class="findings">
+        {{FINDINGS}}
+      </div>
+
+      <div class="card table-card" style="margin-top:24px">
+        <div class="table-wrap">
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th>Static INT8 ablation</th>
+                <th>mAP<br />50–95</th>
+                <th>AP small</th>
+                <th>File</th>
+                <th>CPU ms</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{TABLE_ABLATION}}
+            </tbody>
+          </table>
+        </div>
+        <p class="table-note">
+          Hover a row for what changed. Same split and decode as the main table; the ladder is how the shipped
+          recipe was found.
+        </p>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span>Umut Alperen Cengiz · edge study built on the cigarette detection checkpoint</span>
+      <span>
+        <a href="https://github.com/umutalperencengiz/cigarette-small-object-detection" target="_blank" rel="noopener">paper site</a> ·
+        <a href="https://github.com/umutalperencengiz/cigarette-detector-quantization" target="_blank" rel="noopener">source</a> ·
+        <a href="#top">top ↑</a>
+      </span>
+    </footer>
+
+  </main>
+</body>
+</html>

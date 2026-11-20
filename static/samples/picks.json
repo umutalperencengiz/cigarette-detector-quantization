@@ -1,0 +1,19 @@
+{
+  "frames": [
+    {
+      "file": "static/samples/frame-1.jpg",
+      "source": "smoking_0910_jpg.rf.8a5b6c020d7535d06b70246c1c2a0201.jpg",
+      "kb": 55.4
+    },
+    {
+      "file": "static/samples/frame-2.jpg",
+      "source": "378_jpg.rf.206c114fac4ad2a83da43a27bcf41d31.jpg",
+      "kb": 58.2
+    },
+    {
+      "file": "static/samples/frame-3.jpg",
+      "source": "957_jpg.rf.8433612475789452bb3241c8aa1afc72.jpg",
+      "kb": 74.9
+    }
+  ]
+}

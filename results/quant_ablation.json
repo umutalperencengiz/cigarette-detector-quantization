@@ -1,0 +1,44 @@
+{
+  "description": "Static QDQ ablation on the full 1,370-image validation split, 640 px input, MinMax calibration on 256 training frames, per-channel weights.",
+  "reference": {
+    "recipe": "FP32 ONNX",
+    "ap": 52.071,
+    "ap50": 87.987,
+    "ap75": 53.483,
+    "aps": 31.324,
+    "model_mb": 10.56,
+    "latency_ms": 31.8
+  },
+  "rows": [
+    {
+      "recipe": "Everything quantized",
+      "ap": 0.0,
+      "ap50": 0.0,
+      "ap75": 0.0,
+      "aps": 0.0,
+      "model_mb": 3.26,
+      "latency_ms": 20.57,
+      "note": "The final Concat mixes box pixels (0..682) with probabilities (0..1). One scale over that tensor steps by 2.7, so every score below 0.5 dequantizes to 0 and the model returns no detections."
+    },
+    {
+      "recipe": "Output Concat kept in float",
+      "ap": 39.014,
+      "ap50": 75.199,
+      "ap75": 35.638,
+      "aps": 16.21,
+      "model_mb": 3.26,
+      "latency_ms": 19.98,
+      "note": "Detections come back, but quantizing the Detect head still costs 13 mAP. Percentile calibration instead of MinMax recovers only 1.6 of it (40.66)."
+    },
+    {
+      "recipe": "Output Concat + Detect head in float (shipped)",
+      "ap": 51.141,
+      "ap50": 86.988,
+      "ap75": 50.7,
+      "aps": 29.364,
+      "model_mb": 4.44,
+      "latency_ms": 23.19,
+      "note": "Backbone and neck stay INT8; the head's DFL box regression and score branch keep float precision. Costs 1.2 MB and 3 ms against the fully quantized graph."
+    }
+  ]
+}

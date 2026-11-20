@@ -1,0 +1,15 @@
+{
+  "source": "smoking_0910_jpg.rf.8a5b6c020d7535d06b70246c1c2a0201.jpg",
+  "model": "yolo11n_int8_static_640.onnx",
+  "detections": [
+    {
+      "score": 0.834,
+      "box": [
+        288.6,
+        395.8,
+        338.1,
+        433.7
+      ]
+    }
+  ]
+}
